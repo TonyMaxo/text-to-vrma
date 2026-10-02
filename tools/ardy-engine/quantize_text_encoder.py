@@ -109,11 +109,10 @@ def main():
             "Sitting down and crossing legs.",
         ][:args.verify]
 
-        # Load model WITHOUT device_map — avoids accelerate hooks that break pickling
-        print("Loading quantized model (no hooks)...")
-        model_q = LlamaBiModel.from_pretrained(str(out), torch_dtype=torch.bfloat16)
-        if args.device == "cuda":
-            model_q = model_q.cuda()
+        # Load quantized model WITH device_map="auto" — respects saved quantization config (4-bit/8-bit)
+        print("Loading quantized model (auto device_map, respects quantization config)...")
+        torch.cuda.empty_cache()
+        model_q = LlamaBiModel.from_pretrained(str(out), device_map="auto")
         model_q = model_q.eval()
 
         # Load tokenizer once for verification
@@ -148,7 +147,7 @@ def main():
         passed = True
         for i, text in enumerate(sample_texts):
             with torch.no_grad():
-                out_q = encode_text(model_q, text, args.device)
+                out_q = encode_text(model_q, text, "cuda")
                 out_q = out_q.float().cpu()
 
             if baseline_model is not None:
