@@ -32,9 +32,6 @@ def parse_args():
     ap.add_argument("--min-cos", type=float, default=0.95,
                     help="Min cosine sim vs bf16 baseline (simplified pooling is stricter than "
                          "the runtime EOS pooling; ~0.97 is typical and healthy for 4-bit)")
-    ap.add_argument("--min-cos", type=float, default=0.95,
-                    help="Min cosine similarity vs bf16 baseline (simplified mean-pool metric; "
-                         "real runtime EOS pooling is smoother, so 0.95 here ≈ 0.98+ at runtime)")
     ap.add_argument("--device", default="cuda", help="Device for inference (cuda/cpu)")
     return ap.parse_args()
 
