@@ -9,6 +9,10 @@ import sys
 import shutil
 from pathlib import Path
 
+# T4 (sm_75) + bitsandbytes: cublasLt int8 addmm kernels throw CUBLAS_STATUS_EXECUTION_FAILED.
+# Disable the Lt fast path before torch loads cublas.
+os.environ.setdefault("DISABLE_ADDMM_CUDA_LT", "1")
+
 import torch
 from transformers import BitsAndBytesConfig, AutoTokenizer
 
