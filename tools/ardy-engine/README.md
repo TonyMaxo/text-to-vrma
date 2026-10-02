@@ -67,6 +67,47 @@ Python 3.10+ と git が必要です。ダウンロード合計約20GBのため�
 - `GET /health` → `{"status":"ok","model":...,"device":...,"translator":...}`
 - `POST /generate` `{"text":"お辞儀する","duration":4}` → モーションspec JSON
 
+## 量子化 (4-bit / 8-bit)  [実験的]
+
+llm2vec-base-merged (~16GB bf16) を bitsandbytes で量子化し、VRAM / ディスクを大幅削減できます。
+
+| ビット | 目安サイズ | VRAM (推論時) | 備考 |
+|---|---|---|---|
+| bf16 (非量子化) | ~16 GB | ~16 GB | 既定 |
+| **4-bit (nf4)** | **~4.5 GB** | **~5 GB** | 推奨。コサイン類似度 ≥0.98 で実用的 |
+| 8-bit | ~8.7 GB | ~9 GB | より高品質だが VRAM 要求大 |
+
+### 手順
+
+1. **engine venv に bitsandbytes を導入** (Linux / Windows / macOS 共通):
+   ```bash
+   <venvのpython> -m pip install bitsandbytes
+   ```
+
+2. **量子化実行** (engine venv 内で):
+   ```bash
+   # 4-bit (推奨)
+   <venvのpython> tools/ardy-engine/quantize_text_encoder.py --in <llm2vec-base-merged> --out <llm2vec-base-4bit> --bits 4 --verify 3
+
+   # 8-bit
+   <venvのpython> tools/ardy-engine/quantize_text_encoder.py --in <llm2vec-base-merged> --out <llm2vec-base-8bit> --bits 8 --verify 3
+   ```
+
+3. **量子化モデルでエンジン起動**:
+   ```bash
+   TEXT_ENCODER_DEVICE=cuda <venvのpython> tools/ardy-engine/server.py --merged-base <llm2vec-base-4bit>
+   ```
+
+   - `--merged-base` に量子化先ディレクトリを指定するだけで、config.json の `quantization_config` から自動的に量子化モードで読み込まれます。
+   - `TEXT_ENCODER_DEVICE=cuda` を推奨 (4bit/8bit は CUDA 必須)。
+
+### 注意点
+
+- Kaggle 等の GPU ノートブックで実行推奨 (T4 16GB VRAM で 4-bit 余裕、8-bit ギリギリ)。
+- 量子化にはソース (~16GB) + 出力 (~4.5/8.7GB) のディスクが必要。`df -h` で確認を。
+- 出力ディレクトリに `quantize-complete.marker` が作成されます (installer と同じ慣習)。
+- 検証 (`--verify`) は bf16 基準とコサイン類似度 ≥0.98 で判定。RAM 不足時は整合性チェックのみにフォールバック。
+
 ## ライセンス表記
 
 このエンジンは以下のモデル・ソフトウェアを利用します。再配布時は各ライセンスに従ってください。
