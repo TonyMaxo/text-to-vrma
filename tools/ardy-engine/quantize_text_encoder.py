@@ -29,7 +29,7 @@ def parse_args():
     ap.add_argument("--out", required=True, help="Output directory for quantized model")
     ap.add_argument("--bits", type=int, default=4, choices=[4, 8], help="Quantization bits (4 or 8)")
     ap.add_argument("--verify", type=int, default=3, help="Number of sample sentences to verify (0=skip)")
-    ap.add_argument("--device", default="auto", help="Device map for loading (auto/cuda/cpu)")
+    ap.add_argument("--device", default="cuda", help="Device for inference (cuda/cpu)")
     return ap.parse_args()
 
 
@@ -106,32 +106,51 @@ def main():
             "Sitting down and crossing legs.",
         ][:args.verify]
 
-        # Reload quantized via LLM2Vec wrapper (has encode method)
-        print("Reloading quantized model for verification...")
-        model_q = LLM2Vec.from_pretrained(str(out), device_map=args.device)
-        model_q.eval()
+        # Load model WITHOUT device_map — avoids accelerate hooks that break pickling
+        print("Loading quantized model (no hooks)...")
+        model_q = LlamaBiModel.from_pretrained(str(out), torch_dtype=torch.bfloat16)
+        if args.device == "cuda":
+            model_q = model_q.cuda()
+        model_q = model_q.eval()
+
+        # Load tokenizer once for verification
+        tokenizer = AutoTokenizer.from_pretrained(str(out))
 
         # Try CPU bf16 baseline if RAM allows (optional)
         baseline_model = None
         try:
             print("Loading bf16 baseline on CPU for cosine comparison...")
-            baseline_model = LLM2Vec.from_pretrained(
+            baseline_model = LlamaBiModel.from_pretrained(
                 str(src), device_map="cpu", torch_dtype=torch.bfloat16
             )
             baseline_model.eval()
         except Exception as e:
             print(f"  Baseline skipped (RAM/CPU): {e}")
 
+        def encode_text(model, text, device):
+            """Simple encode: tokenize + forward + last-token hidden state."""
+            inputs = tokenizer(
+                text, return_tensors="pt", padding="longest",
+                truncation=True, max_length=512
+            ).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs, output_hidden_states=True)
+                # Take last hidden state & mean-pool over non-zero attention positions
+                # (simplified vs LLM2Vec.encode, sufficient for cosine comparison)
+                hidden = outputs.hidden_states[-1]  # [1, seq_len, dim]
+                mask = inputs["attention_mask"].unsqueeze(-1)  # [1, seq_len, 1]
+                pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+            return pooled
+
         passed = True
         for i, text in enumerate(sample_texts):
             with torch.no_grad():
-                # Quantized forward via LLM2Vec wrapper
-                out_q = model_q.encode([text], batch_size=1, show_progress_bar=False, device=args.device if args.device != "auto" else "cuda")
+                out_q = encode_text(model_q, text, args.device)
                 out_q = out_q.float()
 
             if baseline_model is not None:
                 with torch.no_grad():
-                    out_b = baseline_model.encode([text], batch_size=1, show_progress_bar=False, device="cpu")
+                    out_b = encode_text(baseline_model, text, "cpu")
                     out_b = out_b.float()
                 cos = torch.nn.functional.cosine_similarity(out_q, out_b, dim=-1).mean().item()
                 status = "✓" if cos >= 0.98 else "✗"
