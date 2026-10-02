@@ -146,12 +146,12 @@ def main():
         for i, text in enumerate(sample_texts):
             with torch.no_grad():
                 out_q = encode_text(model_q, text, args.device)
-                out_q = out_q.float()
+                out_q = out_q.float().cpu()
 
             if baseline_model is not None:
                 with torch.no_grad():
                     out_b = encode_text(baseline_model, text, "cpu")
-                    out_b = out_b.float()
+                    out_b = out_b.float().cpu()
                 cos = torch.nn.functional.cosine_similarity(out_q, out_b, dim=-1).mean().item()
                 status = "✓" if cos >= 0.98 else "✗"
                 if cos < 0.98:
