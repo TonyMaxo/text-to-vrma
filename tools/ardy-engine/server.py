@@ -158,10 +158,12 @@ def _load_translator():
 
         tok = MarianTokenizer.from_pretrained(TRANSLATOR_MODEL)
         mt = MarianMTModel.from_pretrained(TRANSLATOR_MODEL)
+        mt = mt.to("cuda")
         mt.eval()
 
         def translate(text: str) -> str:
             batch = tok([text], return_tensors="pt", truncation=True, max_length=256)
+            batch = {k: v.to(mt.device) for k, v in batch.items()}
             with torch.no_grad():
                 out = mt.generate(**batch, max_length=256, num_beams=4)
             return tok.decode(out[0], skip_special_tokens=True)
