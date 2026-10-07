@@ -60,7 +60,23 @@ Python 3.10+ と git が必要です。ダウンロード合計約20GBのため�
 ```
 
 - `--port` (既定 2337) / `--no-translate` (日本語英訳を無効化)
-- テキストエンコーダのデバイスは環境変数 `TEXT_ENCODER_DEVICE` (既定はアプリ起動時 `cpu`)
+- `--text-encoder <パス>` — テキストエンコーダを明示指定 (ローカルディレクトリ)。
+  指定ディレクトリだけを読み込み、ARDY既定のエンコーダや別のHugging Faceモデルは取得しません。
+  BF16 / 8-bit / 4-bit はディレクトリの config.json の `quantization_config` で自動判別。
+  `--merged-base` より優先
+- `--text-encoder-device cuda|cpu|cuda:1` — テキストエンコーダのデバイス。
+  環境変数 `TEXT_ENCODER_DEVICE` より優先 (未指定なら従来通り)。アニメーションモデルと
+  エンコーダは別デバイスにできます
+
+```bash
+# アニメモデルはcuda、テキストエンコーダもcudaで明示指定
+<venvのpython> tools/ardy-engine/server.py \
+  --model ARDY-Core-RP-20FPS-Horizon40 \
+  --text-encoder <encoder-dir> \
+  --text-encoder-device cuda
+```
+
+- テキストエンコーダのデバイスは環境変数 `TEXT_ENCODER_DEVICE` でも指定可 (既定はアプリ起動時 `cpu`)
 
 ## API
 
